@@ -24,13 +24,32 @@ local ipairs = ipairs
 local db -- We'll put our saved vars here later
 
 -- Make some of the inventory functions more local (ordered by string length!)
-local GetAddOnMetadata = GetAddOnMetadata
-local GetItemQualityColor = GetItemQualityColor
+-- also compat
+local GetAddOnMetadata = function(...)
+    if _G.GetAddOnMetadata then
+        return _G.GetAddOnMetadata(...)
+    elseif C_AddOns and C_AddOns.GetAddOnMetadata then
+        return C_AddOns.GetAddOnMetadata(...)
+    end
+end
+local GetItemQualityColor = function(...)
+    if _G.GetItemQualityColor then
+        return _G.GetItemQualityColor(...)
+    elseif C_Item and C_Item.GetItemQualityColor then
+        return C_Item.GetItemQualityColor(...)
+    end
+end
 local GetAverageItemLevel = GetAverageItemLevel
 local GetInventorySlotInfo = GetInventorySlotInfo
 local GetInventoryItemLink = GetInventoryItemLink
 local GetInventoryItemQuality = GetInventoryItemQuality
-local GetDetailedItemLevelInfo = GetDetailedItemLevelInfo
+local GetDetailedItemLevelInfo = function(...)
+    if _G.GetDetailedItemLevelInfo then
+        return _G.GetDetailedItemLevelInfo(...)
+    elseif C_Item and C_Item.GetDetailedItemLevelInfo then
+        return C_Item.GetDetailedItemLevelInfo(...)
+    end
+end
 local GetInventoryItemDurability = GetInventoryItemDurability
 local GetRelativeDifficultyColor = GetRelativeDifficultyColor
 
@@ -160,10 +179,11 @@ local IsClassic
 do
     local is_retail = WOW_PROJECT_ID == WOW_PROJECT_MAINLINE
     local is_classic = not is_retail
+    local is_mop_classic = WOW_PROJECT_ID == WOW_PROJECT_MISTS_CLASSIC
 
     -- Returns true on a Classic client or nil at other times.
     IsClassic = function()
-        return is_classic
+        return is_classic, is_mop_classic
     end
 end
 
@@ -177,15 +197,16 @@ function Fizzle:OnInitialize()
 
     -- Register our options
     LibStub("AceConfigRegistry-3.0"):RegisterOptionsTable("Fizzle", getOptions)
-    LibStub("AceConfigDialog-3.0"):AddToBlizOptions("Fizzle", title)
+    self._ACD = LibStub("AceConfigDialog-3.0")
+    self._ACD:AddToBlizOptions("Fizzle", title)
 
     -- Register chat command to open options dialog
     self:RegisterChatCommand("fizzle", function()
-        InterfaceOptionsFrame_OpenToCategory(title)
+        Fizzle:showOptions()
     end)
 
     self:RegisterChatCommand("fizz", function()
-        InterfaceOptionsFrame_OpenToCategory(title)
+        Fizzle:showOptions()
     end)
 end
 
@@ -204,6 +225,14 @@ function Fizzle:OnDisable()
     end
 
     self:HideBorders()
+end
+
+function Fizzle:showOptions()
+    if self._ACD.OpenFrames["Fizzle"] then
+        self._ACD:Close("Fizzle")
+    else
+        self._ACD:Open("Fizzle")
+    end
 end
 
 function Fizzle:CreateBorder(slottype, slot, name, hasText)
@@ -271,7 +300,8 @@ function Fizzle:MakeTypeTable()
         "Shirt",
     }
 
-    if IsClassic() then
+    local is_classic, is_mop_classic = IsClassic()
+    if is_classic and not is_mop_classic then
         -- Ranged slot exists in Classic.
         items[#items + 1] = "Ranged"
 
