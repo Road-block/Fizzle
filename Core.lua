@@ -25,31 +25,46 @@ local db -- We'll put our saved vars here later
 
 -- Make some of the inventory functions more local (ordered by string length!)
 -- also compat
+local nop = function(...) end
 local GetAddOnMetadata = function(...)
-    if _G.GetAddOnMetadata then
-        return _G.GetAddOnMetadata(...)
-    elseif C_AddOns and C_AddOns.GetAddOnMetadata then
+    if C_AddOns and C_AddOns.GetAddOnMetadata then
         return C_AddOns.GetAddOnMetadata(...)
+    elseif _G.GetAddOnMetadata then
+        return _G.GetAddOnMetadata(...)
     end
 end
 local GetItemQualityColor = function(...)
-    if _G.GetItemQualityColor then
-        return _G.GetItemQualityColor(...)
-    elseif C_Item and C_Item.GetItemQualityColor then
+    if C_Item and C_Item.GetItemQualityColor then
         return C_Item.GetItemQualityColor(...)
+    elseif _G.GetItemQualityColor then
+        return _G.GetItemQualityColor(...)
+    end
+end
+local GetDetailedItemLevelInfo = function(...)
+    if C_Item and C_Item.GetDetailedItemLevelInfo then
+        return C_Item.GetDetailedItemLevelInfo(...)
+    elseif _G.GetDetailedItemLevelInfo then
+        return _G.GetDetailedItemLevelInfo(...)
+    end
+end
+local GetCurrentItemLevel = function(...)
+    if C_Item and C_Item.GetCurrentItemLevel then
+        return C_Item.GetCurrentItemLevel(...)
+    else
+        return nop(...)
+    end
+end
+local CreateFromEquipmentSlot = function(...)
+    if ItemLocation and ItemLocation.CreateFromEquipmentSlot then
+        return ItemLocation:CreateFromEquipmentSlot(...)
+    else
+        return nop(...)
     end
 end
 local GetAverageItemLevel = GetAverageItemLevel
 local GetInventorySlotInfo = GetInventorySlotInfo
 local GetInventoryItemLink = GetInventoryItemLink
 local GetInventoryItemQuality = GetInventoryItemQuality
-local GetDetailedItemLevelInfo = function(...)
-    if _G.GetDetailedItemLevelInfo then
-        return _G.GetDetailedItemLevelInfo(...)
-    elseif C_Item and C_Item.GetDetailedItemLevelInfo then
-        return C_Item.GetDetailedItemLevelInfo(...)
-    end
-end
 local GetInventoryItemDurability = GetInventoryItemDurability
 local GetRelativeDifficultyColor = GetRelativeDifficultyColor
 
@@ -345,12 +360,19 @@ end
 -- Returns: ilevel
 local function GetiLevel(slotId)
     local link = GetInventoryItemLink("player", slotId)
-
+    local base, current
     if link then
-        local iLevel = GetDetailedItemLevelInfo(link)
-        if iLevel then
-            return iLevel
-        end
+        base = GetDetailedItemLevelInfo(link)
+    end
+    local iloc = CreateFromEquipmentSlot(slotId)
+    if iloc and iloc:IsValid() then
+        current = GetCurrentItemLevel(iloc)
+    end
+    if current then
+        return current, base
+    end
+    if base then
+        return base
     end
     return nil
 end
@@ -430,10 +452,14 @@ function Fizzle:ShowiLevel(item, id, avgIlvl)
     if not istr then return end
 
     if db.showiLevel then
-        local iLvl = GetiLevel(id)
+        local iLvl, bLvl = GetiLevel(id)
         if iLvl then
             local color = GetRelativeDifficultyColor(avgIlvl, iLvl)
-            istr:SetText(GetiLevel(id))
+            local iLevelStr = tostring(iLvl)
+            if bLvl and bLvl ~= iLvl then
+                iLevelStr = iLevelStr.." |cffffffff*|r"
+            end
+            istr:SetText(iLevelStr)
             istr:SetTextColor(color.r, color.g, color.b)
             istr:Show()
         else
